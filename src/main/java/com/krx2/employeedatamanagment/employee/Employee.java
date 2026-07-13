@@ -1,6 +1,8 @@
 package com.krx2.employeedatamanagment.employee;
 
+import com.krx2.employeedatamanagment.crypto.SsnAttributeConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -33,6 +35,7 @@ public class Employee {
     @Column(name = "gender", nullable = false)
     private Gender gender;
 
+    @Convert(converter = SsnAttributeConverter.class)
     @Column(name = "ssn_ciphertext", nullable = false)
     private String ssn;
 
