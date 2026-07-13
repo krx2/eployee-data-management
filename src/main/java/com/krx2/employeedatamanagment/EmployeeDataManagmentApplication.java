@@ -1,13 +1,13 @@
-package com.krx2.emplyeedatamanagment;
+package com.krx2.employeedatamanagment;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class EmplyeeDataManagmentApplication {
+public class EmployeeDataManagmentApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(EmplyeeDataManagmentApplication.class, args);
+        SpringApplication.run(EmployeeDataManagmentApplication.class, args);
     }
 
 }
