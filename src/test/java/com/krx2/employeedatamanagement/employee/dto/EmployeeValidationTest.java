@@ -1,6 +1,6 @@
-package com.krx2.employeedatamanagment.employee.dto;
+package com.krx2.employeedatamanagement.employee.dto;
 
-import com.krx2.employeedatamanagment.employee.Gender;
+import com.krx2.employeedatamanagement.employee.Gender;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -66,6 +66,26 @@ class EmployeeValidationTest {
         Set<ConstraintViolation<EmployeeCreateRequest>> violations = validator.validate(request);
 
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("socialSecurityNumber"));
+    }
+
+    @Test
+    void missingSsnIsRejected() {
+        EmployeeCreateRequest request = new EmployeeCreateRequest(
+                "Jan", "Kowalski", LocalDate.of(1990, 1, 1), Gender.MALE, null);
+
+        Set<ConstraintViolation<EmployeeCreateRequest>> violations = validator.validate(request);
+
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("socialSecurityNumber"));
+    }
+
+    @Test
+    void unreasonablyOldDateOfBirthIsRejected() {
+        EmployeeCreateRequest request = new EmployeeCreateRequest(
+                "Jan", "Kowalski", LocalDate.of(1700, 1, 1), Gender.MALE, "123-45-6789");
+
+        Set<ConstraintViolation<EmployeeCreateRequest>> violations = validator.validate(request);
+
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("dateOfBirth"));
     }
 
     @Test

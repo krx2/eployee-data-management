@@ -1,4 +1,4 @@
-package com.krx2.employeedatamanagment.common;
+package com.krx2.employeedatamanagement.common;
 
 import java.util.UUID;
 

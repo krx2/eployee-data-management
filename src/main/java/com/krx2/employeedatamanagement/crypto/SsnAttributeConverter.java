@@ -1,4 +1,4 @@
-package com.krx2.employeedatamanagment.crypto;
+package com.krx2.employeedatamanagement.crypto;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;

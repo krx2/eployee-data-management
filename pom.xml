@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.krx2</groupId>
-    <artifactId>employee-data-managment</artifactId>
+    <artifactId>employee-data-management</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>employee-data-managment</name>
-    <description>employee-data-managment</description>
+    <name>employee-data-management</name>
+    <description>employee-data-management</description>
     <url/>
     <licenses>
         <license/>

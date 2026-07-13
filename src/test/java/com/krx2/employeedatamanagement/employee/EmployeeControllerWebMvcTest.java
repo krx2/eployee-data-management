@@ -1,9 +1,9 @@
-package com.krx2.employeedatamanagment.employee;
+package com.krx2.employeedatamanagement.employee;
 
 import tools.jackson.databind.ObjectMapper;
-import com.krx2.employeedatamanagment.common.EmployeeNotFoundException;
-import com.krx2.employeedatamanagment.employee.dto.EmployeeCreateRequest;
-import com.krx2.employeedatamanagment.employee.dto.EmployeeResponse;
+import com.krx2.employeedatamanagement.common.EmployeeNotFoundException;
+import com.krx2.employeedatamanagement.employee.dto.EmployeeCreateRequest;
+import com.krx2.employeedatamanagement.employee.dto.EmployeeResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -66,6 +66,35 @@ class EmployeeControllerWebMvcTest {
         mockMvc.perform(post("/employees")
                         .contentType("application/json")
                         .content(invalidPayload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void createWithInvalidEnumValueReturns400() throws Exception {
+        String payload = """
+                {"firstName":"Jan","lastName":"Kowalski","dateOfBirth":"1990-01-01","gender":"NOPE","socialSecurityNumber":"123-45-6789"}
+                """;
+
+        mockMvc.perform(post("/employees")
+                        .contentType("application/json")
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void createWithMalformedJsonReturns400() throws Exception {
+        mockMvc.perform(post("/employees")
+                        .contentType("application/json")
+                        .content("{not valid json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void getByIdWithNonUuidPathVariableReturns400() throws Exception {
+        mockMvc.perform(get("/employees/{id}", "not-a-uuid"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
     }

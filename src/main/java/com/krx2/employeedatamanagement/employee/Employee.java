@@ -1,6 +1,6 @@
-package com.krx2.employeedatamanagment.employee;
+package com.krx2.employeedatamanagement.employee;
 
-import com.krx2.employeedatamanagment.crypto.SsnAttributeConverter;
+import com.krx2.employeedatamanagement.crypto.SsnAttributeConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;

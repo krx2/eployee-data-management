@@ -1,7 +1,7 @@
-package com.krx2.employeedatamanagment.employee;
+package com.krx2.employeedatamanagement.employee;
 
-import com.krx2.employeedatamanagment.employee.dto.EmployeeCreateRequest;
-import com.krx2.employeedatamanagment.employee.dto.EmployeeResponse;
+import com.krx2.employeedatamanagement.employee.dto.EmployeeCreateRequest;
+import com.krx2.employeedatamanagement.employee.dto.EmployeeResponse;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

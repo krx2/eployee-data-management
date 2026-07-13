@@ -1,6 +1,6 @@
-package com.krx2.employeedatamanagment.employee.dto;
+package com.krx2.employeedatamanagement.employee.dto;
 
-import com.krx2.employeedatamanagment.employee.Gender;
+import com.krx2.employeedatamanagement.employee.Gender;
 
 import java.time.LocalDate;
 import java.util.UUID;

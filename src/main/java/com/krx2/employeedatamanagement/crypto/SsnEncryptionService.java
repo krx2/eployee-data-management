@@ -1,4 +1,4 @@
-package com.krx2.employeedatamanagment.crypto;
+package com.krx2.employeedatamanagement.crypto;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;

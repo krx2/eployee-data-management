@@ -1,4 +1,4 @@
-package com.krx2.employeedatamanagment.employee;
+package com.krx2.employeedatamanagement.employee;
 
 public enum Gender {
     MALE,
