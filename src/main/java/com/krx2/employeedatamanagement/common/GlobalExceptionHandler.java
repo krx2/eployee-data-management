@@ -41,13 +41,6 @@ public class GlobalExceptionHandler {
         return problemDetail;
     }
 
-    @ExceptionHandler(DuplicateSsnException.class)
-    public ProblemDetail handleDuplicateSsn(DuplicateSsnException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-        problemDetail.setTitle("Conflict");
-        return problemDetail;
-    }
-
     @ExceptionHandler(EmployeeNotFoundException.class)
     public ProblemDetail handleNotFound(EmployeeNotFoundException ex) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());

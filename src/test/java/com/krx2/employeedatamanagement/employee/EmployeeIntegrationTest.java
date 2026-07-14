@@ -31,10 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-@TestPropertySource(properties = {
-        "app.api-key=test-api-key",
-        "app.ssn-lookup-pepper=test-ssn-lookup-pepper"
-})
+@TestPropertySource(properties = "app.api-key=test-api-key")
 class EmployeeIntegrationTest {
 
     private static final String API_KEY_HEADER = "X-API-Key";
@@ -103,20 +100,6 @@ class EmployeeIntegrationTest {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void creatingSameSsnTwiceReturns409() throws Exception {
-        createEmployee("123-45-6789");
-
-        EmployeeCreateRequest duplicate = new EmployeeCreateRequest(
-                "Anna", "Nowak", LocalDate.of(1991, 2, 2), Gender.FEMALE, "123-45-6789");
-
-        mockMvc.perform(authorized(post("/employees"))
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(duplicate)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409));
     }
 
     @Test
