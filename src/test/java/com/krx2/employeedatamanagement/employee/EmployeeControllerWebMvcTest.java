@@ -8,8 +8,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +21,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -27,7 +30,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(EmployeeController.class)
+@TestPropertySource(properties = "app.api-key=test-api-key")
 class EmployeeControllerWebMvcTest {
+
+    private static final String API_KEY_HEADER = "X-API-Key";
+    private static final String API_KEY = "test-api-key";
 
     @Autowired
     private MockMvc mockMvc;
@@ -37,6 +44,10 @@ class EmployeeControllerWebMvcTest {
 
     @MockitoBean
     private EmployeeService employeeService;
+
+    private static MockHttpServletRequestBuilder authorized(MockHttpServletRequestBuilder builder) {
+        return builder.header(API_KEY_HEADER, API_KEY);
+    }
 
     @Test
     void createReturns201WithLocationAndNoPlaintextSsn() throws Exception {
@@ -48,7 +59,7 @@ class EmployeeControllerWebMvcTest {
         EmployeeCreateRequest request = new EmployeeCreateRequest(
                 "Jan", "Kowalski", LocalDate.of(1990, 1, 1), Gender.MALE, "123-45-6789");
 
-        mockMvc.perform(post("/employees")
+        mockMvc.perform(authorized(post("/employees"))
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -58,16 +69,52 @@ class EmployeeControllerWebMvcTest {
     }
 
     @Test
+    void createWithoutApiKeyReturns401() throws Exception {
+        EmployeeCreateRequest request = new EmployeeCreateRequest(
+                "Jan", "Kowalski", LocalDate.of(1990, 1, 1), Gender.MALE, "123-45-6789");
+
+        mockMvc.perform(post("/employees")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void createWithWrongApiKeyReturns401() throws Exception {
+        EmployeeCreateRequest request = new EmployeeCreateRequest(
+                "Jan", "Kowalski", LocalDate.of(1990, 1, 1), Gender.MALE, "123-45-6789");
+
+        mockMvc.perform(post("/employees")
+                        .header(API_KEY_HEADER, "wrong-key")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void createWithInvalidPayloadReturns400() throws Exception {
         String invalidPayload = """
                 {"firstName":"","lastName":"Kowalski","dateOfBirth":"1990-01-01","gender":"MALE","socialSecurityNumber":"invalid"}
                 """;
 
-        mockMvc.perform(post("/employees")
+        mockMvc.perform(authorized(post("/employees"))
                         .contentType("application/json")
                         .content(invalidPayload))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void createWithBlankFirstNameReturnsEnglishValidationMessage() throws Exception {
+        String payload = """
+                {"firstName":"","lastName":"Kowalski","dateOfBirth":"1990-01-01","gender":"MALE","socialSecurityNumber":"123-45-6789"}
+                """;
+
+        mockMvc.perform(authorized(post("/employees"))
+                        .contentType("application/json")
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0]").value(containsString("must not be blank")));
     }
 
     @Test
@@ -76,7 +123,7 @@ class EmployeeControllerWebMvcTest {
                 {"firstName":"Jan","lastName":"Kowalski","dateOfBirth":"1990-01-01","gender":"NOPE","socialSecurityNumber":"123-45-6789"}
                 """;
 
-        mockMvc.perform(post("/employees")
+        mockMvc.perform(authorized(post("/employees"))
                         .contentType("application/json")
                         .content(payload))
                 .andExpect(status().isBadRequest())
@@ -85,7 +132,7 @@ class EmployeeControllerWebMvcTest {
 
     @Test
     void createWithMalformedJsonReturns400() throws Exception {
-        mockMvc.perform(post("/employees")
+        mockMvc.perform(authorized(post("/employees"))
                         .contentType("application/json")
                         .content("{not valid json"))
                 .andExpect(status().isBadRequest())
@@ -94,7 +141,7 @@ class EmployeeControllerWebMvcTest {
 
     @Test
     void getByIdWithNonUuidPathVariableReturns400() throws Exception {
-        mockMvc.perform(get("/employees/{id}", "not-a-uuid"))
+        mockMvc.perform(authorized(get("/employees/{id}", "not-a-uuid")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
     }
@@ -106,7 +153,7 @@ class EmployeeControllerWebMvcTest {
                 id, "Jan", "Kowalski", LocalDate.of(1990, 1, 1), Gender.MALE, "***-**-6789");
         given(employeeService.getById(id)).willReturn(response);
 
-        mockMvc.perform(get("/employees/{id}", id))
+        mockMvc.perform(authorized(get("/employees/{id}", id)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.firstName").value("Jan"));
     }
@@ -116,7 +163,7 @@ class EmployeeControllerWebMvcTest {
         UUID id = UUID.randomUUID();
         given(employeeService.getById(id)).willThrow(new EmployeeNotFoundException(id));
 
-        mockMvc.perform(get("/employees/{id}", id))
+        mockMvc.perform(authorized(get("/employees/{id}", id)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404));
     }
@@ -125,7 +172,25 @@ class EmployeeControllerWebMvcTest {
     void listReturns200() throws Exception {
         given(employeeService.list(any())).willReturn(new PageImpl<>(List.of()));
 
-        mockMvc.perform(get("/employees"))
+        mockMvc.perform(authorized(get("/employees")))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void deleteReturns204() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(authorized(delete("/employees/{id}", id)))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void deleteReturns404WhenMissing() throws Exception {
+        UUID id = UUID.randomUUID();
+        org.mockito.BDDMockito.willThrow(new EmployeeNotFoundException(id))
+                .given(employeeService).delete(id);
+
+        mockMvc.perform(authorized(delete("/employees/{id}", id)))
+                .andExpect(status().isNotFound());
     }
 }

@@ -4,6 +4,7 @@ import com.krx2.employeedatamanagement.crypto.SsnAttributeConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -16,6 +17,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "employee")
+@EntityListeners(SsnLookupHashListener.class)
 public class Employee {
 
     @Id
@@ -41,6 +43,9 @@ public class Employee {
 
     @Column(name = "key_version", nullable = false)
     private short keyVersion = 1;
+
+    @Column(name = "ssn_lookup_hash", nullable = false)
+    private String ssnLookupHash;
 
     protected Employee() {
     }
@@ -73,11 +78,15 @@ public class Employee {
         return gender;
     }
 
-    public String getSsn() {
+    String ssnForInternalUseOnly() {
         return ssn;
     }
 
     public short getKeyVersion() {
         return keyVersion;
+    }
+
+    void assignSsnLookupHash(String ssnLookupHash) {
+        this.ssnLookupHash = ssnLookupHash;
     }
 }

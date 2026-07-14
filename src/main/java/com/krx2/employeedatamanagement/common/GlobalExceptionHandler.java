@@ -1,5 +1,6 @@
 package com.krx2.employeedatamanagement.common;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -38,6 +39,14 @@ public class GlobalExceptionHandler {
         String detail = "Parameter '%s' has invalid value '%s'".formatted(ex.getName(), ex.getValue());
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
         problemDetail.setTitle("Invalid request");
+        return problemDetail;
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        ProblemDetail problemDetail =
+                ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "An employee with this SSN already exists");
+        problemDetail.setTitle("Conflict");
         return problemDetail;
     }
 

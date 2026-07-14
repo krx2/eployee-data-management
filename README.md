@@ -21,19 +21,30 @@ The whole service — app and database — is containerized. **No local JDK is r
 
 ### Option 1 — fully containerized (recommended)
 
-1. Provide an encryption key. Create a `.env` file in the project root (this file is gitignored, never committed):
+1. Provide the required secrets. Create a `.env` file in the project root (this file is gitignored, never committed):
 
    ```bash
-   echo "APP_ENCRYPTION_KEY=$(openssl rand -base64 32)" > .env
+   {
+     echo "APP_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+     echo "APP_SSN_LOOKUP_PEPPER=$(openssl rand -base64 32)"
+     echo "APP_API_KEY=$(openssl rand -hex 16)"
+   } > .env
    ```
 
    On Windows PowerShell:
 
    ```powershell
-   "APP_ENCRYPTION_KEY=$([Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 })))" | Out-File -Encoding utf8 .env
+   $key = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+   $pepper = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+   $apiKey = -join ((1..32) | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
+   @"
+   APP_ENCRYPTION_KEY=$key
+   APP_SSN_LOOKUP_PEPPER=$pepper
+   APP_API_KEY=$apiKey
+   "@ | Out-File -Encoding utf8 .env
    ```
 
-   Docker Compose reads `.env` automatically; the app container fails fast with a clear error if the variable isn't set — there is no insecure default.
+   Docker Compose reads `.env` automatically; the app container fails fast with a clear error if any of the three variables isn't set — there is no insecure default. See [Security](#security) below for what each one guards.
 
 2. Build and start everything:
 
@@ -54,10 +65,12 @@ Useful when you want to debug/step through the app in an IDE.
 ```bash
 docker compose up -d postgres
 export APP_ENCRYPTION_KEY=$(openssl rand -base64 32)
+export APP_SSN_LOOKUP_PEPPER=$(openssl rand -base64 32)
+export APP_API_KEY=$(openssl rand -hex 16)
 ./mvnw spring-boot:run
 ```
 
-On Windows PowerShell, generate the key the same way as above and set it with `$env:APP_ENCRYPTION_KEY = "..."`. If running from an IDE run configuration, set `APP_ENCRYPTION_KEY` as an environment variable there instead.
+On Windows PowerShell, generate the values the same way as above and set them with `$env:NAME = "..."`. If running from an IDE run configuration, set all three as environment variables there instead.
 
 ### Running the tests
 
@@ -66,21 +79,29 @@ export APP_ENCRYPTION_KEY=$(openssl rand -base64 32)
 ./mvnw test
 ```
 
+Only `APP_ENCRYPTION_KEY` needs to be a real, properly-random value for tests — the crypto round-trip tests actually exercise it. `app.api-key` and `app.ssn-lookup-pepper` are fixed to constant test values via `@TestPropertySource` in the test classes that need them, so `APP_API_KEY`/`APP_SSN_LOOKUP_PEPPER` don't need to be exported for `./mvnw test` to pass.
+
 This needs JDK 25 and Docker (not just the `postgres` container from Option 2, but Docker itself): most tests need a running Postgres — either the one from `docker compose up -d postgres`, or the integration test's **own** disposable container, which it starts automatically via Testcontainers.
 
 ## API
+
+Every endpoint requires an `X-API-Key` header (see [Security](#security)) except the OpenAPI/Swagger paths.
 
 | Method | Path              | Description                          |
 |--------|-------------------|--------------------------------------|
 | POST   | `/employees`       | Create a new employee record         |
 | GET    | `/employees/{id}`   | Retrieve a single employee            |
 | GET    | `/employees`        | List employees (paginated)            |
+| DELETE | `/employees/{id}`   | Delete an employee record             |
+
+Interactive docs (no API key needed): `http://localhost:8080/swagger-ui/index.html`.
 
 Example:
 
 ```bash
 curl -X POST http://localhost:8080/employees \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: $APP_API_KEY" \
   -d '{"firstName":"Jan","lastName":"Kowalski","dateOfBirth":"1990-01-01","gender":"MALE","socialSecurityNumber":"123-45-6789"}'
 ```
 
@@ -104,9 +125,29 @@ Errors follow [RFC 7807 `ProblemDetail`](https://www.rfc-editor.org/rfc/rfc7807)
   "title": "Invalid request",
   "status": 400,
   "detail": "Validation failed",
-  "errors": ["socialSecurityNumber: must match format XXX-XX-XXXX"]
+  "errors": ["socialSecurityNumber: must be a valid SSN in format XXX-XX-XXXX"]
 }
 ```
+
+Creating an employee with an SSN that already exists returns `409 Conflict`. Missing/wrong `X-API-Key` returns `401 Unauthorized`.
+
+## Security
+
+Three secrets are required at startup, none defaulted, none committed — a missing one is a hard startup failure rather than an insecure fallback:
+
+| Env var | Used for |
+|---|---|
+| `APP_ENCRYPTION_KEY` | AES-256-GCM key encrypting the SSN at rest (reversible, see [Technology choices](#technology-choices-and-why)) |
+| `APP_SSN_LOOKUP_PEPPER` | HMAC-SHA256 secret for the deterministic `ssn_lookup_hash` column, used only to detect duplicate SSNs (never to recover the value) |
+| `APP_API_KEY` | Shared secret every request must present via the `X-API-Key` header |
+
+**Authentication is intentionally minimal.** A servlet filter (`ApiKeyAuthFilter`) checks a single shared secret — enough to close "every endpoint is wide open" for this exercise, but not what a real deployment should use. In production this would be OAuth2 client-credentials between internal services, or mTLS at the service-mesh level, not an application-level shared secret.
+
+**SSN validation is semantic, not just syntactic.** Beyond the `XXX-XX-XXXX` shape, `@ValidSsn` enforces the SSA's structural rules: area ≠ `000`/`666`/`900`–`999`, group ≠ `00`, serial ≠ `0000`.
+
+**Duplicate SSNs are rejected**, not silently accepted. Every SSN is also stored as a deterministic HMAC (`ssn_lookup_hash`, unique-indexed) alongside the AES-GCM ciphertext used for the actual value — the hash is only ever used for the uniqueness check, never to recover the SSN itself. A second employee created with the same SSN gets `409 Conflict`.
+
+**The decrypted SSN never leaves the entity.** `Employee` exposes it only through a package-private `ssnForInternalUseOnly()`, callable solely by code in the same package (`EmployeeMapper`) — exposing it elsewhere requires a deliberate visibility change, not just an extra line of code.
 
 ## Technology choices and why
 
@@ -129,22 +170,18 @@ The key is read from an environment variable (`APP_ENCRYPTION_KEY`) and never co
 
 ## What I'd do differently with more time
 
-This service went through a second pass after review feedback (see git history / `IMPLEMENTATION_PLAN.md`), which fixed a real bug (some malformed-input cases were returning 500 instead of 400) and closed several small gaps. What's below is what's still consciously left out, roughly in the order I'd tackle it:
+This service went through two review passes (see git history / `IMPLEMENTATION_PLAN.md`): the first fixed a real bug (some malformed-input cases were returning 500 instead of 400) and closed several small gaps; the second added minimal authentication, semantic SSN validation, stricter encapsulation of the decrypted SSN, duplicate-SSN detection, OpenAPI docs, a `DELETE` endpoint, locale-independent validation messages, and full containerization. What's below is what's still consciously left out, roughly in the order I'd tackle it:
 
-- **Authentication.** This is the biggest real gap for an "internal HR system" handling SSNs — every endpoint is open to anyone with network access. Deliberately out of scope here to keep the exercise focused on the data-handling requirements, but a real deployment needs at minimum a shared-secret gate (e.g. an `X-API-Key` header checked by a servlet filter) between services, and in production, OAuth2 client-credentials or mTLS at the service-mesh level rather than an application-level check at all.
-- **SSN validation is syntactic, not semantic.** The `@Pattern` only checks the `XXX-XX-XXXX` shape — `000-00-0000` or an area number in the invalid 900–999 range both pass today. A real system would enforce the SSA's structural rules (area ≠ 000/666/900-999, group ≠ 00, serial ≠ 0000) in a dedicated constraint, the same way `ReasonableDateOfBirth` is implemented.
-- **`Employee.getSsn()` is a plain public getter.** "SSN is never returned in plaintext" holds today only because the mapper is the only caller — nothing structurally prevents a future caller in a different layer from doing the wrong thing. I'd narrow its visibility to package-private and give it a name that makes misuse uncomfortable (e.g. `ssnForInternalUseOnly()`), so exposing it requires a deliberate visibility change, not just an extra line of code.
 - **Key rotation.** The `key_version` column exists but nothing reads or acts on it yet. Doing this properly runs into a real architectural constraint: a JPA `AttributeConverter` only ever sees the one column it's attached to, not sibling columns on the same row — so it can't itself consult `key_version` to pick a key. The correct minimal fix is to make the ciphertext self-describing (prefix the key version inside the encoded blob itself, alongside the nonce), and either repurpose or drop the `key_version` column in a follow-up migration once that lands.
-- **Duplicate-SSN detection.** There's no way today to tell that the same person has been entered twice — not even under the same exact SSN. The fix I'd implement: an additional `ssn_lookup_hash` column (HMAC-SHA256 of the SSN with a separate secret, deterministic, unlike the AES-GCM ciphertext used for the value itself), populated via a Spring-managed `@EntityListeners` `@PrePersist` callback (which does see the plaintext, unlike the converter), with a unique index and a `DataIntegrityViolationException` → 409 mapping in `GlobalExceptionHandler`.
-- **Audit logging.** Nothing today records who created or read a given employee record, which is a standard compliance expectation for a system holding SSNs. Meaningful "who" logging depends on auth landing first; in the meantime the access itself (action, employee id, timestamp) could already be logged through a dedicated logger so it's routable to a separate audit sink later without revisiting the call sites.
-- **Retention / erasure.** There's no `DELETE` endpoint and no retention policy, which a real HR system holding SSNs would need to reconcile against something like GDPR's right to erasure — and those two concerns can conflict (e.g. legally mandated payroll retention periods), which is worth a real policy decision, not just an endpoint.
-- **Locale-independent validation messages.** Bean Validation's default messages are resolved against the JVM's default locale, which surfaced Polish validation messages in one manual test run purely because of the host machine's locale. I'd pin `Locale.ROOT`/English explicitly so API consumers get consistent messages regardless of where the service happens to run.
+- **Real authentication.** The current `X-API-Key` filter is a single shared secret — enough to close "every endpoint is wide open," but production would need OAuth2 client-credentials or mTLS, not an application-level static key.
+- **Audit logging.** Nothing today records who created, read, or deleted a given employee record, which is a standard compliance expectation for a system holding SSNs. Meaningful "who" logging is more valuable once authentication carries a real principal rather than a shared secret; in the meantime the access itself (action, employee id, timestamp) could already be logged through a dedicated logger so it's routable to a separate audit sink later without revisiting the call sites.
+- **Retention policy.** `DELETE /employees/{id}` exists now (hard delete), but there's still no actual retention policy, which a real HR system holding SSNs would need to reconcile against something like GDPR's right to erasure — and those two concerns can conflict (e.g. legally mandated payroll retention periods). That's a real policy decision, not just an endpoint.
 - **CI** (GitHub Actions) running `mvn test` on every push — the Testcontainers-based integration test is exactly the kind of thing that should run automatically, not just locally.
-- **OpenAPI/Swagger** documentation for the three endpoints.
-- **`@ConfigurationProperties`** instead of a raw `@Value` for the encryption key, mostly for testability/override convenience in more complex configurations.
+- **`@ConfigurationProperties`** instead of raw `@Value` fields for the three secrets, mostly for testability/override convenience in more complex configurations.
 - **Confirming the repository is actually public on GitHub** before treating the assignment's "public GitHub repository" deliverable as satisfied — worth a final check before submission, not something a local working tree can confirm on its own.
+- **Hardening the app-level container for production** — no non-root user, no distroless base, no image scanning today.
 
-What's **not** on this list on purpose, because it's a reasonable simplification for the scope of a few-hours exercise rather than an oversight: no uniqueness constraint beyond the SSN-duplicate-detection idea above (two employees with different SSNs but identical names are fine), and the app-level container isn't hardened for production (no non-root user, no distroless base, no image scanning) — worth calling out explicitly rather than leaving unstated.
+What's **not** on this list on purpose, because it's a reasonable simplification for the scope of a few-hours exercise rather than an oversight: no uniqueness constraint on name+date-of-birth combinations (two employees with different SSNs but identical names/DOB are fine — only exact SSN duplicates are rejected).
 
 ## AI tool usage
 
@@ -158,3 +195,5 @@ That verification step mattered in practice: this project pins **Spring Boot 4.1
 - Jackson's `ObjectMapper` moved to a `tools.jackson.databind` package in this Spring Boot generation, not the familiar `com.fasterxml.jackson.databind` one.
 
 I rejected/corrected each of these rather than accepting the first plausible-looking code, specifically by actually running things (compiling, executing tests, hitting live endpoints) rather than trusting that syntactically reasonable Spring Boot code would behave the way an older mental model of Spring Boot suggests it should. That's the concrete "changed or rejected an AI suggestion" example for this exercise: not a design disagreement, but catching several instances where the generated code was outdated for the pinned framework version and only verification against a real running instance exposed it.
+
+The same discipline carried through two later review passes: after getting a security/completeness review back (the kind an interviewer would give), each fix — the 500-vs-400 bug, minimal API-key auth, semantic SSN validation, duplicate detection, containerizing the app itself — was verified against a real running instance (container or host) before being called done, including deliberately reproducing bugs first (e.g. confirming the 500s, and confirming Polish validation messages on the host's `pl_PL` locale) so the "fix" claim wasn't just asserted.

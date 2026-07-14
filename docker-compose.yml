@@ -24,6 +24,8 @@ services:
       SPRING_DATASOURCE_USERNAME: employee_data
       SPRING_DATASOURCE_PASSWORD: employee_data
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?APP_ENCRYPTION_KEY must be set in the host environment}
+      APP_SSN_LOOKUP_PEPPER: ${APP_SSN_LOOKUP_PEPPER:?APP_SSN_LOOKUP_PEPPER must be set in the host environment}
+      APP_API_KEY: ${APP_API_KEY:?APP_API_KEY must be set in the host environment}
     depends_on:
       postgres:
         condition: service_healthy

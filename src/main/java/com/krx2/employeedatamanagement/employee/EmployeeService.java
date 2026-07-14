@@ -23,7 +23,10 @@ public class EmployeeService {
     }
 
     public EmployeeResponse create(EmployeeCreateRequest request) {
-        Employee saved = employeeRepository.save(employeeMapper.toEntity(request));
+        // saveAndFlush forces the INSERT (and the ssn_lookup_hash uniqueness check) to happen
+        // here, inside the repository call, so a duplicate SSN surfaces as a translated
+        // DataIntegrityViolationException rather than only at end-of-transaction commit.
+        Employee saved = employeeRepository.saveAndFlush(employeeMapper.toEntity(request));
         return employeeMapper.toResponse(saved);
     }
 
@@ -37,5 +40,12 @@ public class EmployeeService {
     @Transactional(readOnly = true)
     public Page<EmployeeResponse> list(Pageable pageable) {
         return employeeRepository.findAll(pageable).map(employeeMapper::toResponse);
+    }
+
+    public void delete(UUID id) {
+        if (!employeeRepository.existsById(id)) {
+            throw new EmployeeNotFoundException(id);
+        }
+        employeeRepository.deleteById(id);
     }
 }

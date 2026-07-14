@@ -25,7 +25,7 @@ public class EmployeeMapper {
                 employee.getLastName(),
                 employee.getDateOfBirth(),
                 employee.getGender(),
-                SsnMasker.mask(employee.getSsn())
+                SsnMasker.mask(employee.ssnForInternalUseOnly())
         );
     }
 }
