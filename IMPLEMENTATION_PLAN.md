@@ -8,7 +8,7 @@ Wybrane warianty modułów:
 |---|---|
 | Model danych | A — anemiczna encja JPA + Spring Data Repository |
 | Obsługa danych wrażliwych (SSN) | B — szyfrowanie symetryczne AES-256-GCM |
-| REST API | B — `ProblemDetail` (RFC 7807) |
+| REST API | B — `ProblemDetail` (RFC 9457) |
 | Persystencja | B — Flyway (wersjonowane migracje) |
 | Testy | A (unit + `@WebMvcTest`), w drugiej kolejności B (Testcontainers) |
 
@@ -32,7 +32,7 @@ Prostsza, mniej boilerplate'u niż pełny podział domain model / persistence mo
 Alternatywa: hashing jednokierunkowy (BCrypt/Argon2) — odrzucony, bo SSN ma zbyt niską entropię (podatność na rainbow table/brute-force nawet z adaptacyjnym hashem) i nieodwracalność uniemożliwia legalne przypadki użycia (np. maskowanie, integracja z systemem płacowym). Szyfrowanie symetryczne pozwala na kontrolowany decrypt i przygotowuje grunt pod rotację kluczy (`key_version`), przy założeniu, że klucz jest zarządzany poza repozytorium (zmienna środowiskowa / secret manager).
 
 ### REST API — B (ProblemDetail)
-Standard RFC 7807 wbudowany w Spring 6+/Boot 4 — mniej własnego kodu niż customowy `ErrorResponse`, spójny z resztą ekosystemu Springa.
+Standard RFC 9457 wbudowany w Spring 6+/Boot 4 — mniej własnego kodu niż customowy `ErrorResponse`, spójny z resztą ekosystemu Springa.
 
 ### Persystencja — B (Flyway)
 Wersjonowany schemat zamiast `hibernate.ddl-auto=update` — pokazuje świadome zarządzanie zmianami schematu, taniej kosztuje niż `ddl-auto` przy ocenie jakości kodu.
